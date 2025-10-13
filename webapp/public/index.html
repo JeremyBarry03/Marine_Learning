@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>B351 Final Project</title>
+        <meta name="keywords" content="n/a">
+        <meta name="author" content="n/a">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="css/main-1.0.css">
+    </head>
+    <body>
+        <header>
+            <h1>BerryBot</h1>
+            <h2>Teaching Machines the Art of Fruit Identification</h2>
+            <p>Created by: Gonzalo Cruz-Cortes, Ava Greene, and Megan Pitts</p>
+        </header>
+
+        <div class="upload-file-container">
+            <!-- <div id="drop_zone" 
+                ondrop="dropHandler(event);" 
+                ondragover="dragOverHandler(event);"
+                ondragenter="dragEnterHandler(event);"
+                ondragleave="dragLeaveHandler(event);">
+                <p style="pointer-events: none;">Upload or drag an image.</p>
+            </div> -->
+            <div id="drop_zone">
+                <p style="pointer-events: none;">Upload an image.</p>
+            </div>
+            <div class="buttons-form">
+                <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFiles(this.files)">
+                <button id="uploadButton" onclick="document.getElementById('fileInput').click()">Upload File</button>
+                <button id="clearButton" onclick="clearFileInput()" style="display: none;">Clear</button>
+                <button id="submitButton" class="submit" onclick="predictImage()">Submit</button>
+            </div>            
+        </div>
+        <div class="prediction-container">
+            <p id="fruit-name"></p>
+            <p id="fruit-nutrition"></p>
+        </div>
+        <div class="polygon-bg">
+            <canvas id="nokey"></canvas>
+        </div>
+
+        <script src="js/main.js"></script>
+        <script src="js/polygon.js"></script>
+    </body>
+
+
+</html>
