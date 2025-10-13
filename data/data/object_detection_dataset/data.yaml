@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../val/images
+test: ../test/images
+
+nc: 7
+names: ['crab', 'eel', 'flatfish', 'roundfish', 'scallop', 'skate', 'whelk']
+
+roboflow:
+  workspace: benchmarkod
+  project: benchmark-e1gx3
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/benchmarkod/benchmark-e1gx3/dataset/1
