@@ -1,16 +1,24 @@
+"""Quick manual test harness for the Flask inference API."""
+from pathlib import Path
+
 import requests
 
-# URL of your Flask backend
-backend_url = 'http://127.0.0.1:5000/'
+from src.config import MARINE_CONFIG
 
-# Path to the image file you want to test
-image_path = '../data/test/apple/1_apple.jpg'
+BACKEND_URL = "http://127.0.0.1:5000"
 
-# Open the image file and send it to the /predict endpoint
-with open(image_path, 'rb') as file:
-    files = {'file': file}
-    response = requests.post(f'{backend_url}/predict', files=files)
+root = Path(MARINE_CONFIG["project_root"])
+labels_path = root / MARINE_CONFIG["data"]["labels_path"]
+image_dir = root / MARINE_CONFIG["data"]["image_dir"]
 
-# Print the response
+with labels_path.open("r", encoding="utf-8") as handle:
+    first_line = handle.readline().strip()
+filename = first_line.split()[0]
+image_path = image_dir / filename
+
+with image_path.open("rb") as image_file:
+    files = {"file": image_file}
+    response = requests.post(f"{BACKEND_URL}/predict", files=files)
+
 print(response.status_code)
-print(response.content)
+print(response.json())

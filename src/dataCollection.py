@@ -1,37 +1,43 @@
-import os
+"""Utility helpers for managing benthic image assets."""
+from __future__ import annotations
 
-def process_fruit_folder(main_folder, fruit_name, destination_folder):
-    count = 0
-    # List all items in the main folder
-    items = os.listdir(main_folder)
+import shutil
+from pathlib import Path
+from typing import Iterable
 
-    # Filter out only the directories whose names start with the specified fruit name
-    fruit_directories = [item for item in items if os.path.isdir(os.path.join(main_folder, item)) and item.startswith(fruit_name)]
 
-    # Iterate through each fruit directory and list its files
-    for fruit_directory in fruit_directories:
-        fruit_folder_path = os.path.join(main_folder, fruit_directory)
-        
-        # List all files in the fruit directory
-        files_in_fruit_folder = [file for file in os.listdir(fruit_folder_path) if os.path.isfile(os.path.join(fruit_folder_path, file))]
+def consolidate_species_images(
+    source_dirs: Iterable[Path],
+    destination_dir: Path,
+    species_name: str,
+) -> None:
+    """
+    Copies images from multiple acquisition runs into a single destination folder.
 
-        # Print or perform any operation on each file
-        for i, file_name in enumerate(files_in_fruit_folder):
-            _, ext = os.path.splitext(file_name)
-            new_name = f"{i + 1}_{fruit_name.lower()}{ext}"
-
-            old_path = os.path.join(fruit_folder_path, file_name)
-            new_path = os.path.join(destination_folder, new_name)
-
-            # Rename the file
-            os.rename(old_path, new_path)
-            
+    Parameters
+    ----------
+    source_dirs:
+        Iterable of directories containing raw captures for the same species.
+    destination_dir:
+        Target directory where consolidated files will be placed.
+    species_name:
+        Name of the species; used to generate deterministic filenames.
+    """
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    counter = 0
+    for source_dir in source_dirs:
+        for image_path in sorted(source_dir.glob("*")):
+            if not image_path.is_file():
+                continue
+            counter += 1
+            new_name = f"{counter:06d}_{species_name.lower()}{image_path.suffix}"
+            shutil.copy2(image_path, destination_dir / new_name)
+    print(f"Consolidated {counter} images into {destination_dir}")
 
 
 if __name__ == "__main__":
-    main_folder_path = "/Users/meganpitts/Desktop/Intro to AI/Final Project GitHub/Fruit-Images-Dataset/Training"
-    destination_folder_path = "/Users/meganpitts/Desktop/Intro to AI/Final Project GitHub/B351-final-project/data/train/watermelon"
-    target_fruit_name = "Watermelon"  # Change this to the desired fruit name
-    
-    process_fruit_folder(main_folder_path, target_fruit_name, destination_folder_path)
+    print(
+        "This module provides helper functions for dataset maintenance. "
+        "Invoke consolidate_species_images from another script or a REPL as needed."
+    )
 

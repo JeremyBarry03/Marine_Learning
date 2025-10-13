@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title>B351 Final Project</title>
+        <title>Marine Learning Lab</title>
         <meta name="keywords" content="n/a">
         <meta name="author" content="n/a">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,9 +9,9 @@
     </head>
     <body>
         <header>
-            <h1>BerryBot</h1>
-            <h2>Teaching Machines the Art of Fruit Identification</h2>
-            <p>Created by: Gonzalo Cruz-Cortes, Ava Greene, and Megan Pitts</p>
+            <h1>Marine Learning Lab</h1>
+            <h2>Accelerating benthic species identification with AI</h2>
+            <p>Upload a seafloor still image to classify the organism in view.</p>
         </header>
 
         <div class="upload-file-container">
@@ -33,8 +33,9 @@
             </div>            
         </div>
         <div class="prediction-container">
-            <p id="fruit-name"></p>
-            <p id="fruit-nutrition"></p>
+            <p id="species-name"></p>
+            <p id="species-summary"></p>
+            <div id="top-predictions"></div>
         </div>
         <div class="polygon-bg">
             <canvas id="nokey"></canvas>

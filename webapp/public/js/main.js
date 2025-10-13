@@ -25,8 +25,9 @@ function clearFileInput() {
         fileInput.value = '';
         document.getElementById('drop_zone').innerHTML = '<p>Upload an image.</p>';
         document.getElementById('clearButton').style.display = 'none';
-        document.getElementById('fruit-name').innerHTML = "";
-        document.getElementById('fruit-nutrition').innerHTML = "";
+        document.getElementById('species-name').innerHTML = "";
+        document.getElementById('species-summary').innerHTML = "";
+        document.getElementById('top-predictions').innerHTML = "";
     }
 }
 
@@ -38,6 +39,11 @@ document.getElementById('fileInput').addEventListener('change', function() {
 //send image data to model for prediction
 function predictImage() {
     const fileInput = document.getElementById('fileInput');
+    if (!fileInput.files.length) {
+        alert('Please upload an image before submitting.');
+        return;
+    }
+
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
@@ -48,17 +54,28 @@ function predictImage() {
     })
     .then(response => response.json())
     .then(data => {
-        console.log('Prediction:', data.prediction);
-        console.log('Nutrition:', data.nutrition);
-        if(data.nutrition.calories == undefined){
-            nutrition = "There are no nutrition facts available for this fruit."
-        }else{
-            nutrition = "<b>Nutrition Facts</b><br>Calories: " + data.nutrition.calories + "<br>Carbs: " + data.nutrition.carbohydrates + "g<br>Fat: " + data.nutrition.fat + "g<br>Protein: " + data.nutrition.protein + "g<br>Sugar: " + data.nutrition.sugar + "g"
+        if (data.error) {
+            document.getElementById('species-name').innerHTML = "Prediction failed.";
+            document.getElementById('species-summary').innerHTML = data.error;
+            document.getElementById('top-predictions').innerHTML = "";
+            return;
         }
-        prediction = data.prediction
-        document.getElementById('fruit-name').innerHTML = prediction;
-        document.getElementById('fruit-nutrition').innerHTML = nutrition;
-        
+
+        const primary = data.primary_prediction;
+        const topPredictions = data.top_predictions || [];
+
+        const primaryText = `${primary.species} (${(primary.confidence * 100).toFixed(2)}% confidence)`;
+        document.getElementById('species-name').innerHTML = primaryText;
+        document.getElementById('species-summary').innerHTML = primary.description || '';
+
+        if (topPredictions.length) {
+            const items = topPredictions
+                .map(pred => `<li>${pred.species} - ${(pred.confidence * 100).toFixed(2)}%</li>`)
+                .join('');
+            document.getElementById('top-predictions').innerHTML = `<b>Top candidates</b><ul>${items}</ul>`;
+        } else {
+            document.getElementById('top-predictions').innerHTML = '';
+        }
     })
     .catch(error => console.error('Error:', error));
 }

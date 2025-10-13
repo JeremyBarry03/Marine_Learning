@@ -1,53 +1,99 @@
-from flask import Flask, request, jsonify
-from PIL import Image
+"""Flask inference service for the marine classifier."""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Dict, List
+
+import json
 import numpy as np
 import tensorflow as tf
+from flask import Flask, jsonify, request
 from flask_cors import CORS
-import requests
+from PIL import Image
+
+from src.config import MARINE_CONFIG
 
 app = Flask(__name__)
 CORS(app)
 
-class_names = ["apple", "apricot", "banana", "blueberry", "cactus-fruit", "cantaloupe", "cherry", "dates",
-               "grape", "grapefruit", "guava", "kiwi", "lemon", "lime", "lychee", "mango", "orange",
-               "peach", "pear", "pineapple", "plum", "pomegranate", "raspberry", "strawberry", 
-               "tomato", "watermelon"]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CONFIG = MARINE_CONFIG
+IMAGE_SIZE = CONFIG["data"]["image_size"]
+MODEL_PATH = PROJECT_ROOT / CONFIG["training"]["checkpoint_path"]
+CLASS_NAMES_PATH = PROJECT_ROOT / CONFIG["training"]["class_names_path"]
 
-model = tf.keras.models.load_model('../models/optimized-model.h5')
+if not MODEL_PATH.exists():
+    raise FileNotFoundError(
+        f"Trained model not found at {MODEL_PATH}. Run src/train_marine.py before starting the API."
+    )
 
-@app.route('/')
+if not CLASS_NAMES_PATH.exists():
+    raise FileNotFoundError(
+        f"Class names file missing at {CLASS_NAMES_PATH}. Ensure train_marine.py completed successfully."
+    )
+
+with CLASS_NAMES_PATH.open("r", encoding="utf-8") as handle:
+    CLASS_NAMES: List[str] = json.load(handle)
+
+MODEL = tf.keras.models.load_model(MODEL_PATH)
+
+SPECIES_FACTS: Dict[str, Dict[str, str]] = {
+    "Scallop": {"summary": "Bivalve mollusk often found on sandy seafloor habitats."},
+    "Roundfish": {"summary": "General term for oval-bodied demersal fish species."},
+    "Crab": {"summary": "Decapod crustaceans adapted to benthic crawling and scavenging."},
+    "Whelk": {"summary": "Predatory sea snails known for spiral shells on soft substrates."},
+    "Skate": {"summary": "Cartilaginous fish with diamond-shaped bodies and wing-like fins."},
+    "Flatfish": {"summary": "Bottom-dwelling fish with asymmetric bodies camouflaged against seabed."},
+    "Eel": {"summary": "Elongated fish species occupying crevices and soft-bottom habitats."},
+}
+
+
+def _preprocess_image(image: Image.Image) -> np.ndarray:
+    image = image.convert("RGB").resize((IMAGE_SIZE, IMAGE_SIZE))
+    array = np.asarray(image).astype("float32") / 255.0
+    return array
+
+
+@app.route("/")
 def home():
-    return "Hello, this is your Flask backend!"
+    return jsonify({"status": "ok", "message": "Marine classifier backend is ready."})
 
-@app.route('/predict', methods=['POST'])
+
+@app.route("/predict", methods=["POST"])
 def predict():
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded."}), 400
 
-    file = request.files['file']
-    img = Image.open(file.stream).convert("RGB")
-    img = img.resize((64, 64)) 
-    img_array = np.array(img) / 255.0
+    file_storage = request.files["file"]
+    if file_storage.filename == "":
+        return jsonify({"error": "Empty filename supplied."}), 400
 
-    predictions = model.predict(np.expand_dims(img_array, axis=0))
-    score = tf.nn.softmax(predictions[0])
-    fruit_name = class_names[np.argmax(score)]
+    image = Image.open(file_storage.stream)
+    processed = _preprocess_image(image)
+    batch = np.expand_dims(processed, axis=0)
 
-    #make the API request and handle the response
-    url = f"https://www.fruityvice.com/api/fruit/{fruit_name}"
-    response = requests.get(url)
-    nutrition = ""
+    logits = MODEL.predict(batch, verbose=0)[0]
+    probabilities = tf.nn.softmax(logits).numpy()
+    top_index = int(np.argmax(probabilities))
+    top_species = CLASS_NAMES[top_index]
+    confidence = float(probabilities[top_index])
 
-    if response.status_code == 200:
-        data = response.json()
-        #get only nutrition facts
-        nutrition = data["nutritions"]
-        #print(data["nutritions"])
-    else:
-        print("API request failed with status code:", response.status_code)
+    top_k = np.argsort(probabilities)[::-1][:3]
+    top_predictions = [
+        {"species": CLASS_NAMES[idx], "confidence": float(probabilities[idx])}
+        for idx in top_k
+    ]
 
-    prediction = ("This image most likely belongs to {} with a {:.2f} percent confidence."
-    .format(class_names[np.argmax(score)], 1000 * np.max(score)))
+    response = {
+        "primary_prediction": {
+            "species": top_species,
+            "confidence": confidence,
+            "description": SPECIES_FACTS.get(top_species, {}).get("summary", ""),
+        },
+        "top_predictions": top_predictions,
+    }
+    return jsonify(response)
 
-    return jsonify({'prediction': prediction, 'nutrition': nutrition})
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)

@@ -1,208 +1,107 @@
-"""
-Notes
-- Figure out how to visualize the weights 
-- Save the model to freeze it/interact with front end (will use mode.save(), model.load(), model.predict())
-"""
+"""Model definitions for benthic species classification."""
+from __future__ import annotations
+
+from typing import Dict, Tuple
 
 import tensorflow as tf
-from tensorflow import keras
-from keras import layers
-import matplotlib.pyplot as plt
-from data_processing import test_images, test_labels, train_images, train_labels
+from tensorflow.keras import layers, models
 
-num_classes = 26 
 
-"""
-Baseline model with no optimizations
-Accuracy: 98.47%
-"""
-# #defining the model and its layers
-# model = keras.Sequential([
-#     layers.Conv2D(32, (3, 3), activation='relu', input_shape=(64, 64, 3)),
-#     layers.MaxPooling2D((2, 2)),
-#     layers.Conv2D(64, (3, 3), activation='relu'),
-#     layers.MaxPooling2D((2, 2)),
-#     #put all the pixels into 1d array
-#     layers.Flatten(),
-#     layers.Dense(64, activation='relu'),
-#     layers.Dense(32, activation='relu'),
-#     layers.Dense(16, activation='relu'),
-#     layers.Dense(8, activation='relu'),
-#     layers.Dense(num_classes, activation='softmax')
-# ])
+BACKBONES = {
+    "EfficientNetB0": {
+        "builder": tf.keras.applications.EfficientNetB0,
+        "preprocess": tf.keras.applications.efficientnet.preprocess_input,
+    },
+    "EfficientNetB1": {
+        "builder": tf.keras.applications.EfficientNetB1,
+        "preprocess": tf.keras.applications.efficientnet.preprocess_input,
+    },
+    "ResNet50": {
+        "builder": tf.keras.applications.ResNet50,
+        "preprocess": tf.keras.applications.resnet.preprocess_input,
+    },
+}
 
-# #compile the model
-# model.compile(optimizer='adam',
-#               loss='sparse_categorical_crossentropy',
-#               metrics=['accuracy'])
 
-# #print a summary of the model architecture
-# model.summary()
+def _build_augmentation(cfg: Dict) -> tf.keras.Sequential:
+    """Creates a Sequential of augmentation layers driven by config."""
+    return tf.keras.Sequential(
+        [
+            layers.RandomFlip(cfg.get("flip", "horizontal"), name="aug_flip"),
+            layers.RandomRotation(cfg.get("rotation", 0.1), name="aug_rotation"),
+            layers.RandomZoom(cfg.get("zoom", 0.1), name="aug_zoom"),
+            layers.RandomContrast(cfg.get("contrast", 0.1), name="aug_contrast"),
+        ],
+        name="data_augmentation",
+    )
 
-# num_epochs = 10
-# batch_size = 32
 
-# #history = model.fit(train_images, train_labels, epochs=num_epochs, batch_size=batch_size, validation_split=0.2)
-# history = model.fit(train_images, train_labels, epochs=num_epochs, batch_size=batch_size, validation_data=(test_images, test_labels))
+def build_classifier(config: Dict) -> Tuple[tf.keras.Model, tf.keras.Model]:
+    """
+    Builds and compiles a transfer learning model using the configured backbone.
 
-# test_loss, test_accuracy = model.evaluate(test_images, test_labels)
+    Returns `(model, base_model)` so callers can optionally fine-tune later.
+    """
+    model_cfg = config["model"]
+    training_cfg = config["training"]
+    image_size = config["data"]["image_size"]
+    num_classes = len(config["data"]["species"])
+    input_shape = (image_size, image_size, 3)
 
-"""
-Optimized Model 1
-Optimizations: kernel_initializer
-Accuracy: 98.07%
-"""
-# #defining the model and its layers
-# model = keras.Sequential([
-#     layers.Conv2D(32, (3, 3), activation='relu', input_shape=(64, 64, 3)),
-#     layers.MaxPooling2D((2, 2)),
-#     layers.Conv2D(64, (3, 3), activation='relu'),
-#     layers.MaxPooling2D((2, 2)),
-#     #put all the pixels into 1d array
-#     layers.Flatten(),
-#     layers.Dense(64, activation='relu', kernel_initializer="he_normal"),
-#     layers.Dense(32, activation='relu', kernel_initializer="he_normal"),
-#     layers.Dense(16, activation='relu', kernel_initializer="he_normal"),
-#     layers.Dense(8, activation='relu', kernel_initializer="he_normal"),
-#     layers.Dense(num_classes, activation='softmax')
-# ])
+    if model_cfg["backbone"] not in BACKBONES:
+        raise ValueError(f"Unsupported backbone: {model_cfg['backbone']}")
 
-# #compile the model
-# model.compile(optimizer='adam',
-#               loss='sparse_categorical_crossentropy',
-#               metrics=['accuracy'])
+    backbone_entry = BACKBONES[model_cfg["backbone"]]
+    backbone_builder = backbone_entry["builder"]
+    preprocess_fn = backbone_entry["preprocess"]
+    base_model = backbone_builder(include_top=False, weights="imagenet", input_shape=input_shape)
+    base_model.trainable = model_cfg.get("train_base", False)
 
-# #print a summary of the model architecture
-# model.summary()
+    inputs = layers.Input(shape=input_shape, name="input_image")
+    x = _build_augmentation(model_cfg["augmentation"])(inputs)
+    x = layers.Lambda(lambda t: preprocess_fn(t * 255.0), name="preprocess")(x)
+    features = base_model(x, training=False)
 
-# num_epochs = 10
-# batch_size = 32
+    pooled = layers.GlobalAveragePooling2D(name="avg_pool")(features)
+    dropped = layers.Dropout(model_cfg["dropout"], name="dropout")(pooled)
+    outputs = layers.Dense(num_classes, activation="softmax", name="predictions")(dropped)
 
-# #history = model.fit(train_images, train_labels, epochs=num_epochs, batch_size=batch_size, validation_split=0.2)
-# history = model.fit(train_images, train_labels, epochs=num_epochs, batch_size=batch_size, validation_data=(test_images, test_labels))
+    model = models.Model(inputs=inputs, outputs=outputs, name="marine_classifier")
 
-# test_loss, test_accuracy = model.evaluate(test_images, test_labels)
+    label_smoothing = training_cfg.get("label_smoothing", 0.0)
+    try:
+        loss = tf.keras.losses.SparseCategoricalCrossentropy(
+            from_logits=False,
+            label_smoothing=label_smoothing,
+        )
+    except TypeError:
+        # Some TensorFlow builds omit the label_smoothing kwarg for the sparse loss.
+        if label_smoothing:
+            raise ValueError(
+                "Current TensorFlow build does not support label_smoothing for "
+                "SparseCategoricalCrossentropy. Set label_smoothing to 0.0 or "
+                "upgrade TensorFlow."
+            )
+        loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=training_cfg["learning_rate"])
+    model.compile(optimizer=optimizer, loss=loss, metrics=["accuracy"])
+    return model, base_model
 
-# #print the test accuracy
-# print("Test accuracy:", test_accuracy)
 
-"""
-Optimized Model 2
-Optimizations: kernel_initializer and dropout
-Accuracy: 97.89%
-"""
-# #defining the model and its layers
-# model = keras.Sequential([
-#     layers.Conv2D(32, (3, 3), activation='relu', input_shape=(64, 64, 3)),
-#     layers.MaxPooling2D((2, 2)),
-#     layers.Conv2D(64, (3, 3), activation='relu'),
-#     layers.MaxPooling2D((2, 2)),
-#     #put all the pixels into 1d array
-#     layers.Flatten(),
-#     layers.Dropout(0.2),
-#     layers.Dense(64, activation='relu', kernel_initializer="he_normal"),
-#     layers.Dense(32, activation='relu', kernel_initializer="he_normal"),
-#     layers.Dense(16, activation='relu', kernel_initializer="he_normal"),
-#     layers.Dense(8, activation='relu', kernel_initializer="he_normal"),
-#     layers.Dense(num_classes, activation='softmax')
-# ])
+def enable_fine_tuning(base_model: tf.keras.Model, fine_tune_from: int) -> None:
+    """
+    Unfreezes layers from `fine_tune_from` onward on the provided backbone.
 
-# #compile the model
-# model.compile(optimizer='adam',
-#               loss='sparse_categorical_crossentropy',
-#               metrics=['accuracy'])
+    A negative index will count from the end (e.g., -20 keeps all but the
+    last 20 layers frozen).
+    """
+    base_model.trainable = True
+    if fine_tune_from is None:
+        return
+    total_layers = len(base_model.layers)
+    if fine_tune_from < 0:
+        fine_tune_from = max(total_layers + fine_tune_from, 0)
+    for layer in base_model.layers[:fine_tune_from]:
+        layer.trainable = False
 
-# #print a summary of the model architecture
-# model.summary()
-
-# num_epochs = 10
-# batch_size = 32
-
-# #history = model.fit(train_images, train_labels, epochs=num_epochs, batch_size=batch_size, validation_split=0.2)
-# history = model.fit(train_images, train_labels, epochs=num_epochs, batch_size=batch_size, validation_data=(test_images, test_labels))
-
-# test_loss, test_accuracy = model.evaluate(test_images, test_labels)
-
-# #print the test accuracy
-# print("Test accuracy:", test_accuracy)
-
-"""
-Optimized Model 3
-Accuracy @ 10 Epochs: 98.84%
-Accuracy @ 15 Epochs: 98.34%
-Accuracy @ 25 Epochs: 99.78%
-Optmizations include: kernel_initizalizer, dropout, early stopping, and more layers
-"""
-# #defining the model and its layers
-model = keras.Sequential([
-    layers.Conv2D(32, (3, 3), activation='relu', input_shape=(64, 64, 3), kernel_initializer="he_normal"),
-    layers.MaxPooling2D((5, 5)),
-    layers.Conv2D(64, (3, 3), activation='relu', kernel_initializer="he_normal"),
-    layers.MaxPooling2D((2, 2)),
-    #put all the pixels into 1d array
-    layers.Flatten(),
-    #experiment with dropout
-    layers.Dropout(0.2),
-    # layers.Dense(1024, activation='relu', kernel_initializer="he_normal"),
-    layers.Dense(256, activation='relu', kernel_initializer="he_normal"),
-    layers.Dense(64, activation='relu', kernel_initializer="he_normal"),
-    layers.Dense(16, activation='relu', kernel_initializer="he_normal"),
-    layers.Dense(8, activation='relu', kernel_initializer="he_normal"),
-    layers.Dense(num_classes, activation='softmax')
-])
-
-#compile the model
-model.compile(optimizer='adam',
-              loss='sparse_categorical_crossentropy',
-              metrics=['accuracy'])
-
-#print a summary of the model architecture
-model.summary()
-
-#define early stopping callback
-early_stopping = tf.keras.callbacks.EarlyStopping(
-    monitor='val_loss',  #monitor validation loss
-    patience=4,           #number of epochs with no improvement after which training will be stopped
-    restore_best_weights=True  #restore model weights from the epoch with the best value of the monitored quantity
-)
-
-#try with minimum 50 epochs, and try different architectures
-#5 got the 98%
-num_epochs = 50
-batch_size = 32
-
-history=model.fit(train_images, train_labels, epochs=num_epochs, batch_size=batch_size, validation_data=(test_images, test_labels))
-#model.save("/models/optimized-model2.h5")
-
-test_loss, test_accuracy = model.evaluate(test_images, test_labels)
-
-print("Test accuracy:", test_accuracy)
-
-"""
-Graphs and Accuracy for every model
-"""
-#plot training history
-plt.figure(figsize=(12, 5))
-
-#plot training & validation accuracy values
-plt.subplot(1, 2, 1)
-plt.plot(history.history['accuracy'])
-plt.plot(history.history['val_accuracy'])
-plt.title('Optimized Model accuracy')
-plt.xlabel('Epoch')
-plt.ylabel('Accuracy')
-plt.legend(['Train', 'Validation'], loc='upper left')
-
-#plot training & validation loss values
-plt.subplot(1, 2, 2)
-plt.plot(history.history['loss'])
-plt.plot(history.history['val_loss'])
-plt.title('Optimized Model loss')
-plt.xlabel('Epoch')
-plt.ylabel('Loss')
-plt.legend(['Train', 'Validation'], loc='upper left')
-
-#show the plots
-plt.tight_layout()
-plt.show()
 
