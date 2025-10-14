@@ -16,6 +16,7 @@ import tensorflow as tf
 
 from src.config import MARINE_CONFIG
 from src.data_processing import build_datasets
+from src.keras_utils import ensure_preprocess_lambda_deserializable
 
 
 def _collect_predictions(model: tf.keras.Model, dataset: tf.data.Dataset) -> Tuple[np.ndarray, np.ndarray]:
@@ -95,7 +96,10 @@ def main(config: Dict) -> None:
     if not model_path.exists():
         raise FileNotFoundError(f"Trained model not found at {model_path}. Run train_marine.py first.")
 
-    model = tf.keras.models.load_model(model_path)
+    ensure_preprocess_lambda_deserializable(
+        (config["data"]["image_size"], config["data"]["image_size"], 3)
+    )
+    model = tf.keras.models.load_model(model_path, safe_mode=False)
     labels, predictions = _collect_predictions(model, test_ds)
 
     num_classes = len(class_names)

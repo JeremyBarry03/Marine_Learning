@@ -23,6 +23,7 @@ import tensorflow as tf
 
 from src.config import MARINE_CONFIG
 from src.data_processing import build_datasets
+from src.keras_utils import ensure_preprocess_lambda_deserializable
 from src.model import build_classifier, enable_fine_tuning
 
 
@@ -315,7 +316,10 @@ def main(config: Dict) -> None:
     else:
         history_objects = [history_warmup]
 
-    best_model = tf.keras.models.load_model(checkpoint_path)
+    ensure_preprocess_lambda_deserializable(
+        (config["data"]["image_size"], config["data"]["image_size"], 3)
+    )
+    best_model = tf.keras.models.load_model(checkpoint_path, safe_mode=False)
     train_metrics = best_model.evaluate(train_ds, verbose=0)
     val_metrics = best_model.evaluate(val_ds, verbose=0)
     test_metrics = best_model.evaluate(test_ds, verbose=0)

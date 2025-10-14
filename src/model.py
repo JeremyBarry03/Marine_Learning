@@ -59,7 +59,12 @@ def build_classifier(config: Dict) -> Tuple[tf.keras.Model, tf.keras.Model]:
 
     inputs = layers.Input(shape=input_shape, name="input_image")
     x = _build_augmentation(model_cfg["augmentation"])(inputs)
-    x = layers.Lambda(lambda t: preprocess_fn(t * 255.0), name="preprocess")(x)
+    preprocess_layer = layers.Lambda(
+        lambda t: preprocess_fn(t * 255.0),
+        name="preprocess",
+        output_shape=(image_size, image_size, 3),
+    )
+    x = preprocess_layer(x)
     features = base_model(x, training=False)
 
     pooled = layers.GlobalAveragePooling2D(name="avg_pool")(features)

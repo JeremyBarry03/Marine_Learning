@@ -1,4 +1,6 @@
 
+const API_BASE_URL = window.MARINE_API_URL || '';
+
 function handleFiles(files) {
     const dropZone = document.getElementById('drop_zone');
     dropZone.style.border = '2px dashed #ccc';
@@ -47,7 +49,7 @@ function predictImage() {
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
-    fetch('http://127.0.0.1:5000/predict', {
+    fetch(`${API_BASE_URL}/predict`, {
         method: 'POST',
         body: formData,
         mode: 'cors',

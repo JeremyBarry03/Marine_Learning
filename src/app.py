@@ -12,11 +12,14 @@ from flask_cors import CORS
 from PIL import Image
 
 from src.config import MARINE_CONFIG
-
-app = Flask(__name__)
-CORS(app)
+from src.keras_utils import ensure_preprocess_lambda_deserializable
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+STATIC_DIR = PROJECT_ROOT / "webapp" / "public"
+
+app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
+CORS(app)
+
 CONFIG = MARINE_CONFIG
 IMAGE_SIZE = CONFIG["data"]["image_size"]
 MODEL_PATH = PROJECT_ROOT / CONFIG["training"]["checkpoint_path"]
@@ -35,7 +38,8 @@ if not CLASS_NAMES_PATH.exists():
 with CLASS_NAMES_PATH.open("r", encoding="utf-8") as handle:
     CLASS_NAMES: List[str] = json.load(handle)
 
-MODEL = tf.keras.models.load_model(MODEL_PATH)
+ensure_preprocess_lambda_deserializable((IMAGE_SIZE, IMAGE_SIZE, 3))
+MODEL = tf.keras.models.load_model(MODEL_PATH, safe_mode=False)
 
 SPECIES_FACTS: Dict[str, Dict[str, str]] = {
     "Scallop": {"summary": "Bivalve mollusk often found on sandy seafloor habitats."},
@@ -55,8 +59,13 @@ def _preprocess_image(image: Image.Image) -> np.ndarray:
 
 
 @app.route("/")
-def home():
-    return jsonify({"status": "ok", "message": "Marine classifier backend is ready."})
+def index():
+    return app.send_static_file("index.html")
+
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})
 
 
 @app.route("/predict", methods=["POST"])
