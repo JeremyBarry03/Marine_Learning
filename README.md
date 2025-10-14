@@ -19,7 +19,7 @@ pip install -r requirements.txt
 
 ## Training Workflow
 
-1. **Configure:** Settings live in `src/config.py` (`MARINE_CONFIG`). It uses a 70/20/10 train/val/test split saved to `models/splits.json` so future runs reuse the exact same partition.
+1. **Configure:** Settings live in `src/config.py` (`MARINE_CONFIG`). It uses an 80/10/10 train/val/test split saved to `models/splits.json` so future runs reuse the exact same partition.
 2. **Train:**  
    ```bash
    python -m src.train_marine

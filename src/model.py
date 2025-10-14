@@ -67,24 +67,6 @@ def build_classifier(config: Dict) -> Tuple[tf.keras.Model, tf.keras.Model]:
     outputs = layers.Dense(num_classes, activation="softmax", name="predictions")(dropped)
 
     model = models.Model(inputs=inputs, outputs=outputs, name="marine_classifier")
-
-    label_smoothing = training_cfg.get("label_smoothing", 0.0)
-    try:
-        loss = tf.keras.losses.SparseCategoricalCrossentropy(
-            from_logits=False,
-            label_smoothing=label_smoothing,
-        )
-    except TypeError:
-        # Some TensorFlow builds omit the label_smoothing kwarg for the sparse loss.
-        if label_smoothing:
-            raise ValueError(
-                "Current TensorFlow build does not support label_smoothing for "
-                "SparseCategoricalCrossentropy. Set label_smoothing to 0.0 or "
-                "upgrade TensorFlow."
-            )
-        loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False)
-    optimizer = tf.keras.optimizers.Adam(learning_rate=training_cfg["learning_rate"])
-    model.compile(optimizer=optimizer, loss=loss, metrics=["accuracy"])
     return model, base_model
 
 
