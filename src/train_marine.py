@@ -23,7 +23,8 @@ import tensorflow as tf
 
 from src.config import MARINE_CONFIG
 from src.data_processing import build_datasets
-from src.keras_utils import ensure_preprocess_lambda_deserializable
+from src.evaluate_marine import generate_evaluation_artifacts
+from src.keras_utils import ensure_preprocess_lambda_deserializable, restore_preprocess_lambda
 from src.model import build_classifier, enable_fine_tuning
 
 
@@ -320,6 +321,7 @@ def main(config: Dict) -> None:
         (config["data"]["image_size"], config["data"]["image_size"], 3)
     )
     best_model = tf.keras.models.load_model(checkpoint_path, safe_mode=False)
+    restore_preprocess_lambda(best_model, config["model"]["backbone"])
     train_metrics = best_model.evaluate(train_ds, verbose=0)
     val_metrics = best_model.evaluate(val_ds, verbose=0)
     test_metrics = best_model.evaluate(test_ds, verbose=0)
@@ -329,6 +331,8 @@ def main(config: Dict) -> None:
 
     accuracy_plot_path = root / training_cfg["accuracy_plot_path"]
     _plot_accuracy(history_metrics, accuracy_plot_path, warmup_epochs, fine_tune_epochs)
+
+    evaluation_report = generate_evaluation_artifacts(best_model, test_ds, class_names, config)
 
     summary_path = root / training_cfg["training_summary_path"]
     summary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -341,6 +345,7 @@ def main(config: Dict) -> None:
         "test_accuracy": test_metrics[1],
         "warmup_epochs": warmup_epochs,
         "fine_tune_epochs": fine_tune_epochs,
+        "evaluation_overall_accuracy": evaluation_report["overall_accuracy"],
     }
     with summary_path.open("w", encoding="utf-8") as handle:
         json.dump(training_summary, handle, indent=2)

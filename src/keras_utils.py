@@ -32,3 +32,34 @@ def ensure_preprocess_lambda_deserializable(target_shape: Sequence[int]) -> None
 
     _LambdaLayer.from_config = classmethod(_patched_from_config)
     _LAMBDA_PATCHED = True
+
+
+def restore_preprocess_lambda(model, backbone: str) -> None:
+    """
+    Replaces the serialized lambda's closure so inference works under Keras 3.
+
+    When older checkpoints are loaded, the `preprocess_fn` captured by the lambda
+    arrives as a serialized dictionary rather than a callable. This helper swaps in
+    the real preprocessing routine for the configured backbone.
+    """
+    try:
+        layer = model.get_layer("preprocess")
+    except ValueError:
+        return
+
+    if not hasattr(layer, "function"):
+        return
+
+    from src.model import BACKBONES  # imported lazily to avoid circular deps
+
+    backbone_entry = BACKBONES.get(backbone)
+    if not backbone_entry:
+        raise ValueError(f"Unsupported backbone '{backbone}' while restoring preprocess lambda.")
+
+    preprocess_fn = backbone_entry["preprocess"]
+
+    def _patched_lambda(t, _fn=preprocess_fn):
+        return _fn(t * 255.0)
+
+    layer.function = _patched_lambda
+    layer._function = _patched_lambda

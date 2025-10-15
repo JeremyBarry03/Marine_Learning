@@ -12,7 +12,7 @@ from flask_cors import CORS
 from PIL import Image
 
 from src.config import MARINE_CONFIG
-from src.keras_utils import ensure_preprocess_lambda_deserializable
+from src.keras_utils import ensure_preprocess_lambda_deserializable, restore_preprocess_lambda
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = PROJECT_ROOT / "webapp" / "public"
@@ -40,6 +40,7 @@ with CLASS_NAMES_PATH.open("r", encoding="utf-8") as handle:
 
 ensure_preprocess_lambda_deserializable((IMAGE_SIZE, IMAGE_SIZE, 3))
 MODEL = tf.keras.models.load_model(MODEL_PATH, safe_mode=False)
+restore_preprocess_lambda(MODEL, CONFIG["model"]["backbone"])
 
 SPECIES_FACTS: Dict[str, Dict[str, str]] = {
     "Scallop": {"summary": "Bivalve mollusk often found on sandy seafloor habitats."},

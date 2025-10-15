@@ -16,7 +16,7 @@ import tensorflow as tf
 
 from src.config import MARINE_CONFIG
 from src.data_processing import build_datasets
-from src.keras_utils import ensure_preprocess_lambda_deserializable
+from src.keras_utils import ensure_preprocess_lambda_deserializable, restore_preprocess_lambda
 
 
 def _collect_predictions(model: tf.keras.Model, dataset: tf.data.Dataset) -> Tuple[np.ndarray, np.ndarray]:
@@ -90,16 +90,13 @@ def _plot_confusion_matrix(confusion_matrix: np.ndarray, class_names: List[str],
     plt.close(fig)
 
 
-def main(config: Dict) -> None:
-    _, _, test_ds, class_names = build_datasets(config)
-    model_path = Path(config["project_root"]) / config["training"]["checkpoint_path"]
-    if not model_path.exists():
-        raise FileNotFoundError(f"Trained model not found at {model_path}. Run train_marine.py first.")
-
-    ensure_preprocess_lambda_deserializable(
-        (config["data"]["image_size"], config["data"]["image_size"], 3)
-    )
-    model = tf.keras.models.load_model(model_path, safe_mode=False)
+def generate_evaluation_artifacts(
+    model: tf.keras.Model,
+    test_ds: tf.data.Dataset,
+    class_names: List[str],
+    config: Dict,
+) -> Dict[str, Dict[str, float] | float]:
+    """Writes evaluation report and confusion matrix, returning the summary dict."""
     labels, predictions = _collect_predictions(model, test_ds)
 
     num_classes = len(class_names)
@@ -113,17 +110,35 @@ def main(config: Dict) -> None:
         "per_class": per_class,
     }
 
-    report_path = Path(config["project_root"]) / config["evaluation"]["report_path"]
+    root = Path(config["project_root"])
+    report_path = root / config["evaluation"]["report_path"]
     report_path.parent.mkdir(parents=True, exist_ok=True)
     with report_path.open("w", encoding="utf-8") as handle:
         json.dump(report, handle, indent=2)
 
-    cm_path = Path(config["project_root"]) / config["evaluation"]["confusion_matrix_path"]
+    cm_path = root / config["evaluation"]["confusion_matrix_path"]
     _plot_confusion_matrix(confusion_matrix, class_names, cm_path)
 
-    print(f"Evaluation complete. Accuracy: {overall_accuracy:.4f}")
-    print(f"Metrics written to {report_path}")
-    print(f"Confusion matrix saved to {cm_path}")
+    return report
+
+
+def main(config: Dict) -> None:
+    _, _, test_ds, class_names = build_datasets(config)
+    model_path = Path(config["project_root"]) / config["training"]["checkpoint_path"]
+    if not model_path.exists():
+        raise FileNotFoundError(f"Trained model not found at {model_path}. Run train_marine.py first.")
+
+    ensure_preprocess_lambda_deserializable(
+        (config["data"]["image_size"], config["data"]["image_size"], 3)
+    )
+    model = tf.keras.models.load_model(model_path, safe_mode=False)
+    restore_preprocess_lambda(model, config["model"]["backbone"])
+    report = generate_evaluation_artifacts(model, test_ds, class_names, config)
+
+    print(f"Evaluation complete. Accuracy: {report['overall_accuracy']:.4f}")
+    root = Path(config["project_root"])
+    print(f"Metrics written to {root / config['evaluation']['report_path']}")
+    print(f"Confusion matrix saved to {root / config['evaluation']['confusion_matrix_path']}")
 
 
 if __name__ == "__main__":
