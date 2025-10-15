@@ -1,61 +1,115 @@
-# Marine Learning Platform
+# Benthic Species Recognition Dataset
 
-This repository hosts the end‑to‑end pipeline for classifying benthic organisms from underwater imagery. The project currently targets single-organism image classification across seven species (Scallop, Roundfish, Crab, Whelk, Skate, Flatfish, Eel) with a roadmap for future object detection.
+### **About this event**
 
-## Repository Layout
+The William & Mary AI Club will host its first-ever AI Case Competition during Fall 2025 (Homecoming Weekend). This event is designed as a hybrid between a hackathon and a strategic case competition, where students are asked not only to develop functioning applications but also to present their reasoning, frameworks, and design approaches.
 
-- `data/data/classification_dataset/` — source images and `labels.txt` manifest provided by the challenge.
-- `models/` — trained model checkpoints and training/evaluation metrics.
-- `src/` — Python source code for data processing, model construction, training, evaluation, and the Flask inference service.
-- `webapp/` — placeholder front-end artifacts (to be updated for marine theming later).
+For the Marine & Benthic Science Track, students will develop AI-powered computer vision solutions for automated benthic species identification from underwater survey imagery. Teams will work with real-world seafloor monitoring datasets to build models that can accelerate marine biodiversity assessments, support ecosystem monitoring, and enable efficient analysis of large-scale benthic surveys. The solutions should demonstrate practical applications in marine research, conservation efforts, and long-term ecological monitoring programs.
 
-## Environment Setup
+### **Prompt**
 
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
+"Design an AI-powered solution for benthic species identification in marine science research and monitoring. The primary task is Image Classification that develop robust classification models using a comprehensive dataset of 10,500 images to accurately identify 7 benthic species (Scallop, Roundfish, Crab, Whelk, Skate, Flatfish, Eel) from single-organism underwater images. As an advanced extension, teams may tackle Object Detection that build detection systems to locate and identify multiple organisms within complex seafloor scenes using a smaller supplementary dataset. The solution should demonstrate how these AI models can ac  
+celerate benthic biodiversity assessments, support marine ecosystem monitoring, enable efficient analysis of large-scale underwater surveys, and provide insights into species distribution patterns, population dynamics, and habitat characteristics across temporal and spatial scales."Tasks
 
-## Training Workflow
+### Task 1: Image Classification
 
-1. **Configure:** Settings live in `src/config.py` (`MARINE_CONFIG`). It uses an 80/10/10 train/val/test split saved to `models/splits.json` so future runs reuse the exact same partition.
-2. **Train:**  
-   ```bash
-   python -m src.train_marine
-   ```
-   - Performs a warm-up stage with the ResNet50 backbone frozen.
-   - Optionally fine-tunes the upper backbone layers using a reduced learning rate.
-   - Outputs:
-     - `models/marine_classifier.h5` — ready-to-serve Keras model.
-     - `models/metrics/class_names.json`
-     - `models/metrics/training_history.json`
-     - `models/metrics/training_summary.json`
-     - `models/splits.json` (deterministic dataset split record)
+Classify benthic organisms into one of 7 species categories from underwater images.
 
-3. **Evaluate:**  
-   ```bash
-   python -m src.evaluate_marine
-   ```
-   - Loads the saved model and test split.
-   - Produces per-species precision/recall/F1 in `models/metrics/evaluation.json`.
-   - Generates `models/metrics/confusion_matrix.png`.
+### Task 2: Object Detection
 
-## Running the Inference API
+Detect and localize multiple benthic organisms within underwater images using bounding boxes.  
+		  
+---
 
-```bash
-python -m src.app
-```
+## Dataset 1: Classification Dataset
 
-- Accepts POST requests at `/predict` with an image file (`multipart/form-data`).
-- Returns the primary species prediction, confidence score, and top-three ranked species.
-- Uses metadata from `src/api_integration.py` (currently static placeholders) for quick species summaries.
+### Structure
 
-Use `src/test_flask.py` as a simple smoke test once the server is running.
+classification\_dataset/
 
-## Next Steps
+├── images/
 
-1. **Hyperparameter search:** Explore additional backbones (EfficientNet variants, ConvNeXt) and fine-tune schedules for higher accuracy.
-2. **Object detection module:** Extend the config and codebase with a `src/detection/` package to leverage the supplementary multi-organism dataset.
-3. **Model explainability:** Add Grad-CAM or attention maps to aid marine scientists in interpreting classifications.
-4. **Web experience:** Refresh `webapp/` to align with marine branding and surface model metrics/visualizations.
+│   ├── 2015\_image001.jpg
+
+│   ├── 2022\_image002.jpg
+
+│   └── ...
+
+└── labels.txt
+
+**Label Format** (`labels.txt`):
+
+2015\_image001.jpg Scallop
+
+2022\_image002.jpg Eel
+
+### Statistics
+
+| Species | Images | Source Years |
+| :---- | :---- | :---- |
+| Scallop | 1,500 | 2015, 2022 |
+| Roundfish | 1,500 | 2015, 2022 |
+| Crab | 1,500 | 2015, 2022 |
+| Whelk | 1,500 | 2015, 2022 |
+| Skate | 1,500 | 2015, 2022 |
+| Flatfish | 1,500 | 2015, 2022 |
+| Eel | 1,500 | 2015, 2022 |
+| **Total** | **10,500** |  |
+
+---
+
+## Dataset 2: Object Detection Dataset (YOLO Format)
+
+### Structure
+
+detection\_dataset/
+
+├── data.yaml
+
+├── train/
+
+│   ├── images/
+
+│   └── labels/
+
+├── val/
+
+│   ├── images/
+
+│   └── labels/
+
+└── test/
+
+    ├── images/
+
+    └── labels/
+
+**Label Format** (YOLO):
+
+class\_id x\_center y\_center width height
+
+0 0.512 0.458 0.234 0.156
+
+### Statistics
+
+**Dataset Splits**:
+
+| Split | Images | Objects | Avg Objects/Image |
+| :---- | :---- | :---- | :---- |
+| Train | 1,931 | 2,058 | 1.07 |
+| Val | 551 | 575 | 1.04 |
+| Test | 277 | 299 | 1.08 |
+| **Total** | **2,759** | **2,932** | **1.06** |
+
+**Class Distribution**:
+
+| Class ID | Species | Train | Val | Test | Total |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| 0 | Crab | 291 | 89 | 45 | 425 |
+| 1 | Eel | 275 | 89 | 43 | 407 |
+| 2 | Flatfish | 209 | 62 | 26 | 297 |
+| 3 | Roundfish | 287 | 82 | 38 | 407 |
+| 4 | Scallop | 419 | 109 | 69 | 597 |
+| 5 | Skate | 295 | 76 | 39 | 410 |
+| 6 | Whelk | 282 | 68 | 39 | 389 |
+
