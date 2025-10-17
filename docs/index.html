@@ -1,51 +1,49 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title>Marine Learning -  Team SMS</title>
+        <title>Marine Learning - Team SMS</title>
         <meta name="keywords" content="n/a">
         <meta name="author" content="n/a">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="stylesheet" href="css/main-1.0.css">
+        <link rel="icon" href="data:,">
     </head>
     <body>
         <header class="hero">
-            <h1 class="hero-copy hero-title">Marine Learning -  Team SMS</h1>
+            <h1 class="hero-copy hero-title">Marine Learning - Team SMS</h1>
             <h2 class="hero-copy hero-subtitle">Accelerating benthic species identification with AI</h2>
             <p class="hero-copy hero-description">Upload a seafloor image to classify the organism in view.</p>
         </header>
 
         <div class="upload-file-container">
-            <div class="mode-toggle">
-                <label>
-                    <input type="radio" name="inference-mode" value="classification" checked>
-                    Classification
-                </label>
-                <label>
-                    <input type="radio" name="inference-mode" value="detection">
-                    Detection
-                </label>
+            <div class="input-panel">
+                <div class="mode-toggle">
+                    <label>
+                        <input type="radio" name="inference-mode" value="classification" checked>
+                        Classification
+                    </label>
+                    <label>
+                        <input type="radio" name="inference-mode" value="detection">
+                        Detection
+                    </label>
+                </div>
+                <div class="buttons-form">
+                    <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFiles(this.files)">
+                    <button type="button" id="uploadButton" onclick="document.getElementById('fileInput').click()">Upload File</button>
+                    <button type="button" id="clearButton" onclick="clearFileInput()" style="display: none;">Clear</button>
+                    <button type="button" id="submitButton" class="submit" onclick="predictImage()">Submit</button>
+                </div>
+                <div class="prediction-container">
+                    <p id="species-name"></p>
+                    <p id="species-summary"></p>
+                    <div id="top-predictions"></div>
+                </div>
             </div>
-            <!-- <div id="drop_zone" 
-                ondrop="dropHandler(event);" 
-                ondragover="dragOverHandler(event);"
-                ondragenter="dragEnterHandler(event);"
-                ondragleave="dragLeaveHandler(event);">
-                <p style="pointer-events: none;">Upload or drag an image.</p>
-            </div> -->
-            <div id="drop_zone">
-                <p style="pointer-events: none;">Upload an image.</p>
+            <div class="preview-panel">
+                <div id="drop_zone">
+                    <p style="pointer-events: none;">Upload an image.</p>
+                </div>
             </div>
-            <div class="buttons-form">
-                <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFiles(this.files)">
-                <button id="uploadButton" onclick="document.getElementById('fileInput').click()">Upload File</button>
-                <button id="clearButton" onclick="clearFileInput()" style="display: none;">Clear</button>
-                <button id="submitButton" class="submit" onclick="predictImage()">Submit</button>
-            </div>            
-        </div>
-        <div class="prediction-container">
-            <p id="species-name"></p>
-            <p id="species-summary"></p>
-            <div id="top-predictions"></div>
         </div>
         <div class="polygon-bg">
             <canvas id="nokey"></canvas>
