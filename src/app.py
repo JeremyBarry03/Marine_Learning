@@ -13,7 +13,7 @@ from src.detection_service import run_detection
 from src.pytorch_inference import MarineClassifier
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-STATIC_DIR = PROJECT_ROOT / "webapp" / "public"
+STATIC_DIR = PROJECT_ROOT / "docs"
 CLASSIFICATION_CHECKPOINT = PROJECT_ROOT / "densenet121_benthic_final.pth"
 CLASS_NAMES_PATH = PROJECT_ROOT / "models" / "metrics" / "class_names.json"
 DETECTION_CHECKPOINT = PROJECT_ROOT / "marine_yolo_v8n_best" / "best.pt"
