@@ -1,134 +1,331 @@
-
 const API_BASE_URL = window.MARINE_API_URL || '';
+
+let inferenceMode = 'classification';
+let heroRevealDone = false;
+let heroRevealPending = false;
+let heroRevealTimer = null;
+const HERO_ELEMENTS = [];
+
+function registerHeroElements() {
+    HERO_ELEMENTS.splice(0, HERO_ELEMENTS.length, ...document.querySelectorAll('.hero-copy'));
+    if (!heroRevealDone) {
+        HERO_ELEMENTS.forEach((element) => element.classList.remove('revealed'));
+    }
+    if (heroRevealPending && !heroRevealDone) {
+        queueHeroReveal(0);
+    }
+}
+
+function queueHeroReveal(delay = 0) {
+    if (heroRevealDone) {
+        return;
+    }
+    heroRevealPending = true;
+    if (heroRevealTimer) {
+        clearTimeout(heroRevealTimer);
+    }
+    heroRevealTimer = setTimeout(() => {
+        heroRevealTimer = null;
+        revealHeroText();
+    }, delay);
+}
+
+function revealHeroText() {
+    if (heroRevealDone) {
+        return;
+    }
+    if (!HERO_ELEMENTS.length) {
+        queueHeroReveal(120);
+        return;
+    }
+    heroRevealDone = true;
+    heroRevealPending = false;
+    const baseDelay = 220;
+    HERO_ELEMENTS.forEach((element, index) => {
+        setTimeout(() => {
+            element.classList.add('revealed');
+        }, baseDelay + index * 140);
+    });
+}
+
+function attachModeToggleHandlers() {
+    const inputs = document.querySelectorAll('input[name="inference-mode"]');
+    inputs.forEach((input) => {
+        if (input.checked) {
+            inferenceMode = input.value;
+        }
+        input.addEventListener('change', (event) => {
+            inferenceMode = event.target.value;
+            clearResults();
+            clearOverlay();
+        });
+    });
+}
+
+function initializeFileInputWatcher() {
+    const fileInput = document.getElementById('fileInput');
+    const clearButton = document.getElementById('clearButton');
+    if (!fileInput) {
+        return;
+    }
+    fileInput.addEventListener('change', function onChange() {
+        if (clearButton) {
+            clearButton.style.display = this.files.length > 0 ? 'block' : 'none';
+        }
+        if (this.files.length) {
+            handleFiles(this.files);
+        }
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        registerHeroElements();
+        attachModeToggleHandlers();
+        initializeFileInputWatcher();
+    });
+} else {
+    registerHeroElements();
+    attachModeToggleHandlers();
+    initializeFileInputWatcher();
+}
+
+window.addEventListener('bubblesBurstComplete', () => {
+    queueHeroReveal(220);
+});
+
+queueHeroReveal(4800);
 
 function handleFiles(files) {
     const dropZone = document.getElementById('drop_zone');
+    if (!dropZone || !files.length) {
+        return;
+    }
     dropZone.style.border = '2px dashed #ccc';
-
     const file = files[0];
     displayImage(file);
 }
 
 function displayImage(file) {
     const reader = new FileReader();
-
-    reader.onload = function (e) {
+    reader.onload = function onLoad(event) {
         const dropZone = document.getElementById('drop_zone');
-        dropZone.innerHTML = `<img src="${e.target.result}" alt="Uploaded Image" style="max-width: 100%; max-height: 200px;">`;
+        if (!dropZone) {
+            return;
+        }
+        dropZone.innerHTML = `
+            <div class="image-preview">
+                <img id="previewImage" src="${event.target.result}" alt="Uploaded Image">
+                <canvas id="overlayCanvas"></canvas>
+            </div>
+        `;
+        const img = document.getElementById('previewImage');
+        if (img) {
+            img.onload = () => {
+                syncOverlayCanvas();
+                clearOverlay();
+            };
+        }
     };
-
     reader.readAsDataURL(file);
 }
 
-//update the visibility of the "Clear" button based on file selection
-function clearFileInput() {
-    const fileInput = document.getElementById('fileInput');
-    if (fileInput.files.length > 0) {
-        fileInput.value = '';
-        document.getElementById('drop_zone').innerHTML = '<p>Upload an image.</p>';
-        document.getElementById('clearButton').style.display = 'none';
-        document.getElementById('species-name').innerHTML = "";
-        document.getElementById('species-summary').innerHTML = "";
-        document.getElementById('top-predictions').innerHTML = "";
+function syncOverlayCanvas() {
+    const img = document.getElementById('previewImage');
+    const canvas = document.getElementById('overlayCanvas');
+    if (!img || !canvas) {
+        return;
     }
+    const width = img.clientWidth || img.width;
+    const height = img.clientHeight || img.height;
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
 }
 
-document.getElementById('fileInput').addEventListener('change', function() {
-    const clearButton = document.getElementById('clearButton');
-    clearButton.style.display = this.files.length > 0 ? 'block' : 'none';
-});
+function clearOverlay() {
+    const canvas = document.getElementById('overlayCanvas');
+    if (!canvas) {
+        return;
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
 
-//send image data to model for prediction
+function clearResults() {
+    document.getElementById('species-name').innerHTML = '';
+    document.getElementById('species-summary').innerHTML = '';
+    document.getElementById('top-predictions').innerHTML = '';
+}
+
+function clearFileInput() {
+    const fileInput = document.getElementById('fileInput');
+    if (!fileInput || !fileInput.files.length) {
+        return;
+    }
+    fileInput.value = '';
+    const dropZone = document.getElementById('drop_zone');
+    if (dropZone) {
+        dropZone.innerHTML = '<p style="pointer-events: none;">Upload an image.</p>';
+    }
+    const clearButton = document.getElementById('clearButton');
+    if (clearButton) {
+        clearButton.style.display = 'none';
+    }
+    clearOverlay();
+    clearResults();
+}
+
 function predictImage() {
     const fileInput = document.getElementById('fileInput');
-    if (!fileInput.files.length) {
+    if (!fileInput || !fileInput.files.length) {
         alert('Please upload an image before submitting.');
         return;
     }
 
+    const endpoint = inferenceMode === 'detection' ? '/detect' : '/predict';
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
-    fetch(`${API_BASE_URL}/predict`, {
+    fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
         body: formData,
         mode: 'cors',
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            document.getElementById('species-name').innerHTML = "Prediction failed.";
-            document.getElementById('species-summary').innerHTML = data.error;
-            document.getElementById('top-predictions').innerHTML = "";
-            return;
-        }
+        .then((response) => response.json())
+        .then((data) => {
+            if (data.error) {
+                clearOverlay();
+                document.getElementById('species-name').innerHTML = 'Request failed.';
+                document.getElementById('species-summary').innerHTML = data.error;
+                document.getElementById('top-predictions').innerHTML = '';
+                return;
+            }
 
-        const primary = data.primary_prediction;
-        const topPredictions = data.top_predictions || [];
-
-        const primaryText = `${primary.species} (${(primary.confidence * 100).toFixed(2)}% confidence)`;
-        document.getElementById('species-name').innerHTML = primaryText;
-        document.getElementById('species-summary').innerHTML = primary.description || '';
-
-        if (topPredictions.length) {
-            const items = topPredictions
-                .map(pred => `<li>${pred.species} - ${(pred.confidence * 100).toFixed(2)}%</li>`)
-                .join('');
-            document.getElementById('top-predictions').innerHTML = `<b>Top candidates</b><ul>${items}</ul>`;
-        } else {
+            if (inferenceMode === 'detection') {
+                handleDetectionResponse(data);
+            } else {
+                handleClassificationResponse(data);
+            }
+        })
+        .catch((error) => {
+            clearOverlay();
+            document.getElementById('species-name').innerHTML = 'Request failed.';
+            document.getElementById('species-summary').innerHTML = String(error);
             document.getElementById('top-predictions').innerHTML = '';
+        });
+}
+
+function handleClassificationResponse(data) {
+    clearOverlay();
+    const primary = data.primary_prediction;
+    const topPredictions = data.top_predictions || [];
+
+    if (!primary) {
+        document.getElementById('species-name').innerHTML = 'Classification unavailable.';
+        document.getElementById('species-summary').innerHTML = 'The server did not return a prediction.';
+        document.getElementById('top-predictions').innerHTML = '';
+        return;
+    }
+
+    const primaryText = `${primary.species} (${(primary.confidence * 100).toFixed(2)}% confidence)`;
+    document.getElementById('species-name').innerHTML = primaryText;
+    document.getElementById('species-summary').innerHTML = primary.description || '';
+
+    if (topPredictions.length) {
+        const items = topPredictions
+            .map((pred) => `<li>${pred.species} - ${(pred.confidence * 100).toFixed(2)}%</li>`)
+            .join('');
+        document.getElementById('top-predictions').innerHTML = `<b>Top candidates</b><ul>${items}</ul>`;
+    } else {
+        document.getElementById('top-predictions').innerHTML = '';
+    }
+}
+
+function handleDetectionResponse(data) {
+    syncOverlayCanvas();
+    const imageSize = data.image_size || { width: 1, height: 1 };
+    const detections = Array.isArray(data.detections) ? data.detections : [];
+
+    renderDetections(detections, imageSize);
+    renderDetectionList(detections);
+}
+
+function renderDetections(detections, imageSize) {
+    const canvas = document.getElementById('overlayCanvas');
+    if (!canvas) {
+        return;
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!detections.length) {
+        return;
+    }
+
+    const scaleX = canvas.width / imageSize.width;
+    const scaleY = canvas.height / imageSize.height;
+
+    detections.forEach((detection) => {
+        const [x1, y1, x2, y2] = detection.bbox || [0, 0, 0, 0];
+        const left = x1 * scaleX;
+        const top = y1 * scaleY;
+        const width = (x2 - x1) * scaleX;
+        const height = (y2 - y1) * scaleY;
+
+        ctx.strokeStyle = 'rgba(159, 122, 234, 0.95)';
+        ctx.lineWidth = 2.5;
+        if (ctx.roundRect) {
+            ctx.beginPath();
+            ctx.roundRect(left, top, Math.max(width, 1), Math.max(height, 1), 8);
+            ctx.stroke();
+        } else {
+            ctx.strokeRect(left, top, Math.max(width, 1), Math.max(height, 1));
         }
-    })
-    .catch(error => console.error('Error:', error));
+
+        const label = `${detection.species} ${(detection.confidence * 100).toFixed(1)}%`;
+        const fontSize = Math.max(12, Math.min(18, canvas.width * 0.035));
+        ctx.font = `${fontSize}px "Segoe UI", "Helvetica Neue", sans-serif`;
+        ctx.fillStyle = 'rgba(17, 24, 39, 0.85)';
+        const textWidth = ctx.measureText(label).width;
+        const padding = 6;
+
+        ctx.fillRect(
+            left,
+            Math.max(top - fontSize - padding, 0),
+            textWidth + padding * 2,
+            fontSize + padding
+        );
+        ctx.fillStyle = '#f9f7ff';
+        ctx.fillText(label, left + padding, Math.max(top - 6, fontSize));
+    });
+}
+
+function renderDetectionList(detections) {
+    const title = detections.length
+        ? `Detections (${detections.length})`
+        : 'No detections found.';
+    document.getElementById('species-name').innerHTML = title;
+    document.getElementById('species-summary').innerHTML = detections.length
+        ? 'Bounding boxes are overlaid on the preview. Confidence shown per species.'
+        : 'No organisms were detected above the confidence threshold.';
+
+    if (!detections.length) {
+        document.getElementById('top-predictions').innerHTML = '';
+        return;
+    }
+
+    const items = detections
+        .map(
+            (det, index) =>
+                `<li>#${index + 1}: ${det.species} &mdash; ${(det.confidence * 100).toFixed(1)}%</li>`
+        )
+        .join('');
+    document.getElementById('top-predictions').innerHTML = `<b>Detections</b><ul>${items}</ul>`;
 }
 
 //------------------------------------------------------
 // DEBUGGING AND CODE FOR DRAGGING AND DROPPING AN IMAGE
 //------------------------------------------------------
-
-// function dropHandler(ev) {
-//     console.log("File(s) dropped");
-//     document.getElementById('drop_zone').classList.remove('over');
-//     ev.preventDefault();
-
-//     let files = [];
-
-//     if (ev.dataTransfer.items) {
-//         files = [...ev.dataTransfer.items].map(item => item.kind === "file" ? item.getAsFile() : null);
-//     } else {
-//         files = [...ev.dataTransfer.files];
-//     }
-
-//     //filter out non-image files and limit to one file
-//     files = files.filter(file => file && file.type.startsWith('image/')).slice(0, 1);
-
-//     //for debug
-//     if (files.length === 1) {
-//         console.log(`… image file name = ${files[0].name}`);
-//         clearButton.style.display =  'block';
-//         handleFiles(files);
-//     } else {
-//         console.log("Please drop only one image file.");
-//     }
-// }
-
-// function dragOverHandler(ev) {
-//     ev.preventDefault();
-// }
-
-// function dragEnterHandler(ev) {
-//     document.getElementById('drop_zone').classList.add('over');
-// }
-
-// function dragLeaveHandler(ev) {
-//     document.getElementById('drop_zone').classList.remove('over');
-// }
-
-//buttons file processing
-//function to handle button click
-// function logButtonPress(event) {
-//     console.log("Button pressed:", event.target.id);
-// }
-//document.getElementById("uploadButton").addEventListener("click", browseFiles);
-//document.getElementById("submitButton").addEventListener("click", logButtonPress);
-
+// (disabled in production but kept for reference)

@@ -8,13 +8,23 @@
         <link rel="stylesheet" href="css/main-1.0.css">
     </head>
     <body>
-        <header>
-            <h1>Marine Learning -  Team SMS</h1>
-            <h2>Accelerating benthic species identification with AI</h2>
-            <p>Upload a seafloor image to classify the organism in view.</p>
+        <header class="hero">
+            <h1 class="hero-copy hero-title">Marine Learning -  Team SMS</h1>
+            <h2 class="hero-copy hero-subtitle">Accelerating benthic species identification with AI</h2>
+            <p class="hero-copy hero-description">Upload a seafloor image to classify the organism in view.</p>
         </header>
 
         <div class="upload-file-container">
+            <div class="mode-toggle">
+                <label>
+                    <input type="radio" name="inference-mode" value="classification" checked>
+                    Classification
+                </label>
+                <label>
+                    <input type="radio" name="inference-mode" value="detection">
+                    Detection
+                </label>
+            </div>
             <!-- <div id="drop_zone" 
                 ondrop="dropHandler(event);" 
                 ondragover="dragOverHandler(event);"
