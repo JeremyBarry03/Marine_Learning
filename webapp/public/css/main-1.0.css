@@ -121,3 +121,11 @@ h1{
 input[type="file"] {
     display: none;
 }
+
+.app-footer {
+    position: relative;
+    margin-top: 2rem;
+    text-align: center;
+    color: #333;
+    font-size: 0.95rem;
+}
