@@ -1,0 +1,14 @@
+# Keep Docker context small when building locally or via Railway.
+.git
+.gitignore
+
+docs/
+webapp/
+data/
+YOLO-main/
+
+*.ipynb
+__pycache__/
+*.pyc
+tmp/
+temp_*/

@@ -1,0 +1,16 @@
+# Static frontend is deployed separately; keep backend build lean.
+docs/
+webapp/
+
+# Data, notebooks, and training artifacts not needed in runtime image.
+data/
+YOLO-main/
+
+# Local notebooks / checkpoints / caches
+*.ipynb
+__pycache__/
+*.pyc
+
+# Misc build outputs
+tmp/
+temp_*/
