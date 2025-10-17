@@ -1,180 +1,241 @@
-var canvas = document.getElementById('nokey'),
-    can_w = parseInt(canvas.getAttribute('width')),
-    can_h = parseInt(canvas.getAttribute('height')),
-    ctx = canvas.getContext('2d');
+const canvas = document.getElementById("nokey");
+const ctx = canvas.getContext("2d");
 
-var BALL_NUM = 30;
-var R = 0.8;
-var balls = [];
-var link_line_width = 0.8;
-var dis_limit = 260;
-var alpha_f = 0.03;
+const BUBBLE_COUNT = 30;
+const bubbles = [];
+let width = window.innerWidth;
+let height = window.innerHeight;
+let dpr = window.devicePixelRatio || 1;
 
-// Random color generator
-function getRandomColor() {
-    var r = Math.floor(Math.random() * 256);
-    var g = Math.floor(Math.random() * 256);
-    var b = Math.floor(Math.random() * 256);
-    return 'rgb(' + r + ',' + g + ',' + b + ')';
+function resizeCanvas() {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    dpr = window.devicePixelRatio || 1;
+
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
 }
 
-// Random speed
-function getRandomSpeed(pos) {
-    var min = -1,
-        max = 1;
-    switch (pos) {
-        case 'top':
-            return [randomNumFrom(min, max), randomNumFrom(0.1, max)];
-        case 'right':
-            return [randomNumFrom(min, -0.1), randomNumFrom(min, max)];
-        case 'bottom':
-            return [randomNumFrom(min, max), randomNumFrom(min, -0.1)];
-        case 'left':
-            return [randomNumFrom(0.1, max), randomNumFrom(min, max)];
-        default:
-            return [0, 0];
-    }
-}
-
-function randomNumFrom(min, max) {
+function random(min, max) {
     return Math.random() * (max - min) + min;
 }
 
-function randomSidePos(length) {
-    return Math.ceil(Math.random() * length);
-}
-
-// Random Ball
-function getRandomBall() {
-    var pos = ['top', 'right', 'bottom', 'left'][Math.floor(Math.random() * 4)];
+function createBubble() {
+    const radius = random(8, 36);
+    const speed = random(0.35, 1.1);
     return {
-        x: pos === 'right' ? can_w + R : pos === 'left' ? -R : randomSidePos(can_w),
-        y: pos === 'top' ? -R : pos === 'bottom' ? can_h + R : randomSidePos(can_h),
-        vx: getRandomSpeed(pos)[0],
-        vy: getRandomSpeed(pos)[1],
-        r: R,
-        alpha: 1,
-        phase: randomNumFrom(0, 10),
-        color: getRandomColor()
+        x: random(-radius, width + radius),
+        y: height + radius + random(0, height),
+        radius,
+        speed,
+        drift: random(0.08, 0.35),
+        wobbleSpeed: random(1.0, 2.1),
+        wobbleOffset: random(0, Math.PI * 2),
+        baseHue: random(185, 210),
+        life: 1,
+        popping: false,
+        popStart: 0,
+        burstSeed: random(0.8, 1.2),
     };
 }
 
-// Draw Ball
-function renderBalls() {
-    balls.forEach(function (b) {
-        ctx.fillStyle = b.color;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, R, 0, Math.PI * 2, true);
-        ctx.closePath();
-        ctx.fill();
-    });
+function drawBubble(bubble, time) {
+    const { x, y, radius, baseHue } = bubble;
+    const fade = Math.max(0, bubble.life);
+
+    // Bubble body gradient (gives a 3D look)
+    const gradient = ctx.createRadialGradient(
+        x - radius * 0.3,
+        y - radius * 0.45,
+        radius * 0.2,
+        x,
+        y,
+        radius
+    );
+    gradient.addColorStop(0, `hsla(${baseHue}, 70%, 96%, ${0.45 * fade})`);
+    gradient.addColorStop(0.5, `hsla(${baseHue + 5}, 65%, 68%, ${0.18 * fade})`);
+    gradient.addColorStop(1, `hsla(${baseHue + 10}, 60%, 40%, ${0.03 * fade})`);
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Highlight
+    const highlightX = x - radius * 0.45;
+    const highlightY = y - radius * 0.55;
+    const highlightGradient = ctx.createRadialGradient(
+        highlightX,
+        highlightY,
+        0,
+        highlightX,
+        highlightY,
+        radius * 0.55
+    );
+    highlightGradient.addColorStop(0, `rgba(255, 255, 255, ${0.28 * fade})`);
+    highlightGradient.addColorStop(1, `rgba(255, 255, 255, 0)`);
+    ctx.fillStyle = highlightGradient;
+    ctx.beginPath();
+    ctx.arc(
+        highlightX,
+        highlightY,
+        radius * 0.6,
+        0,
+        Math.PI * 2
+    );
+    ctx.fill();
+
+    // Rim sheen
+    ctx.strokeStyle = `hsla(${baseHue}, 70%, 82%, ${0.12 * fade})`;
+    ctx.lineWidth = Math.max(1, radius * 0.04);
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Soft inner sparkle
+    const sparkleRadius = radius * 0.2;
+    const sparkleGradient = ctx.createRadialGradient(
+        x + radius * 0.25,
+        y + radius * 0.1,
+        0,
+        x + radius * 0.25,
+        y + radius * 0.1,
+        sparkleRadius
+    );
+    sparkleGradient.addColorStop(0, `rgba(255, 255, 255, ${0.18 * fade})`);
+    sparkleGradient.addColorStop(1, `rgba(255, 255, 255, 0)`);
+    ctx.fillStyle = sparkleGradient;
+    ctx.beginPath();
+    ctx.arc(
+        x + radius * 0.25,
+        y + radius * 0.1,
+        sparkleRadius,
+        0,
+        Math.PI * 2
+    );
+    ctx.fill();
 }
 
-// Update balls
-function updateBalls() {
-    balls.forEach(function (b) {
-        b.x += b.vx;
-        b.y += b.vy;
-
-        // Wrap around the screen
-        b.x = b.x > can_w ? -R : b.x < -R ? can_w : b.x;
-        b.y = b.y > can_h ? -R : b.y < -R ? can_h : b.y;
-
-        // Update color
-        if (Math.random() < 0.01) {
-            b.color = getRandomColor();
+function updateBubble(bubble, delta, time) {
+    if (bubble.popping) {
+        const elapsed = Math.max(0, time - bubble.popStart);
+        bubble.life = Math.max(0, 1 - elapsed * 3);
+        if (elapsed >= 0.45) {
+            Object.assign(bubble, createBubble());
         }
+        return;
+    }
 
-        // Update alpha
-        b.phase += alpha_f;
-        b.alpha = Math.abs(Math.cos(b.phase));
+    const wobble = Math.sin(time * bubble.wobbleSpeed + bubble.wobbleOffset) * bubble.drift;
+    bubble.x += wobble;
+    bubble.y -= bubble.speed * delta * 0.06;
+
+    if (bubble.y + bubble.radius < -20) {
+        const reset = createBubble();
+        bubble.x = reset.x;
+        bubble.y = height + reset.radius;
+        bubble.radius = reset.radius;
+        bubble.speed = reset.speed;
+        bubble.drift = reset.drift;
+        bubble.wobbleSpeed = reset.wobbleSpeed;
+        bubble.wobbleOffset = reset.wobbleOffset;
+        bubble.baseHue = reset.baseHue;
+    }
+}
+
+let lastTimestamp = 0;
+function renderFrame(timestamp) {
+    if (!lastTimestamp) {
+        lastTimestamp = timestamp;
+    }
+    const delta = timestamp - lastTimestamp;
+    lastTimestamp = timestamp;
+
+    ctx.clearRect(0, 0, width, height);
+
+    bubbles.forEach((bubble) => {
+        updateBubble(bubble, delta, timestamp / 1000);
+        drawBubble(bubble, timestamp / 1000);
+        if (bubble.popping) {
+            renderPopEffect(bubble, timestamp / 1000);
+        }
     });
+
+    window.requestAnimationFrame(renderFrame);
 }
 
-// Draw lines
-function lerpColor(color1, color2, fraction) {
-    var c1 = color1.substring(4, color1.length - 1).split(',');
-    var c2 = color2.substring(4, color2.length - 1).split(',');
-    var r = Math.round(lerp(Number(c1[0]), Number(c2[0]), fraction));
-    var g = Math.round(lerp(Number(c1[1]), Number(c2[1]), fraction));
-    var b = Math.round(lerp(Number(c1[2]), Number(c2[2]), fraction));
-    return 'rgb(' + r + ',' + g + ',' + b + ')';
+function renderPopEffect(bubble, time) {
+    const elapsed = Math.max(0, time - bubble.popStart);
+    const progress = Math.min(1, elapsed * 3 * bubble.burstSeed);
+
+    const ringRadius = bubble.radius * (1 + progress * 1.9);
+    const ringAlpha = Math.max(0, 0.3 * (1 - progress));
+    const ringWidth = Math.max(0.8, bubble.radius * 0.15 * (1 - progress));
+
+    ctx.strokeStyle = `hsla(${bubble.baseHue}, 85%, 85%, ${ringAlpha})`;
+    ctx.lineWidth = ringWidth;
+    ctx.beginPath();
+    ctx.arc(bubble.x, bubble.y, ringRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const innerProgress = Math.min(1, elapsed * 4);
+    const innerRadius = bubble.radius * (0.6 + innerProgress);
+    const innerAlpha = Math.max(0, 0.18 * (1 - innerProgress));
+
+    const innerGlow = ctx.createRadialGradient(
+        bubble.x,
+        bubble.y,
+        innerRadius * 0.2,
+        bubble.x,
+        bubble.y,
+        innerRadius
+    );
+    innerGlow.addColorStop(0, `hsla(${bubble.baseHue}, 90%, 95%, ${innerAlpha})`);
+    innerGlow.addColorStop(1, `hsla(${bubble.baseHue}, 60%, 55%, 0)`);
+
+    ctx.fillStyle = innerGlow;
+    ctx.beginPath();
+    ctx.arc(bubble.x, bubble.y, innerRadius, 0, Math.PI * 2);
+    ctx.fill();
 }
 
-function lerp(start, end, fraction) {
-    return start + (end - start) * fraction;
-}
-
-function renderLines() {
-    for (var i = 0; i < balls.length; i++) {
-        for (var j = i + 1; j < balls.length; j++) {
-            var fraction = getDisOf(balls[i], balls[j]) / dis_limit;
-            if (fraction < 1) {
-                var alpha = (1 - fraction).toString();
-                var color = lerpColor(balls[i].color, balls[j].color, fraction);
-                ctx.strokeStyle = color;
-                ctx.lineWidth = link_line_width;
-                ctx.globalAlpha = alpha;
-                ctx.beginPath();
-                ctx.moveTo(balls[i].x, balls[i].y);
-                ctx.lineTo(balls[j].x, balls[j].y);
-                ctx.stroke();
-                ctx.closePath();
-            }
+function popBubbleAt(x, y, time) {
+    for (let i = bubbles.length - 1; i >= 0; i -= 1) {
+        const bubble = bubbles[i];
+        const dx = x - bubble.x;
+        const dy = y - bubble.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance <= bubble.radius * 1.35) {
+            bubble.popping = true;
+            bubble.popStart = time;
+            return;
         }
     }
-    ctx.globalAlpha = 1;
 }
 
-// Distance calculator
-function getDisOf(b1, b2) {
-    var delta_x = Math.abs(b1.x - b2.x);
-    var delta_y = Math.abs(b1.y - b2.y);
-    return Math.sqrt(delta_x * delta_x + delta_y * delta_y);
-}
-
-// Add new balls if needed
-function addBallIfy() {
-    if (balls.length < BALL_NUM) {
-        balls.push(getRandomBall());
-    }
-}
-
-// Main render function
-function render() {
-    ctx.clearRect(0, 0, can_w, can_h);
-    renderBalls();
-    renderLines();
-    updateBalls();
-    addBallIfy();
-    window.requestAnimationFrame(render);
-}
-
-// Initialize canvas and balls
-function initCanvas() {
-    canvas.setAttribute('width', window.innerWidth);
-    canvas.setAttribute('height', window.innerHeight);
-    can_w = parseInt(canvas.getAttribute('width'));
-    can_h = parseInt(canvas.getAttribute('height'));
-}
-
-function initBalls(num) {
-    for (var i = 1; i <= num; i++) {
-        balls.push(getRandomBall());
-    }
-}
-
-// Start the animation
-function goMovie() {
-    initCanvas();
-    initBalls(BALL_NUM);
-    window.requestAnimationFrame(render);
-}
-
-// Handle window resize
-window.addEventListener('resize', function () {
-    initCanvas();
+canvas.addEventListener("click", (event) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left);
+    const y = (event.clientY - rect.top);
+    popBubbleAt(x, y, performance.now() / 1000);
 });
 
-// Start the animation
-goMovie();
+function init() {
+    resizeCanvas();
+    bubbles.length = 0;
+    for (let i = 0; i < BUBBLE_COUNT; i += 1) {
+        bubbles.push(createBubble());
+    }
+    window.requestAnimationFrame(renderFrame);
+}
+
+window.addEventListener("resize", () => {
+    resizeCanvas();
+});
+
+init();
