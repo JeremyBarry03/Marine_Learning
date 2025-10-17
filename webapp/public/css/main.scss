@@ -1,9 +1,8 @@
 @import 'components/navbar.scss';
 html {
     padding: 0;
-    // background-color: rgb(14, 14, 16);
-    // color: white;
-    background-color: whitesmoke;
+    background: linear-gradient(180deg, #011b2d 0%, #024873 45%, #0277b5 100%);
+    min-height: 100%;
 }
 
 body {
@@ -13,6 +12,8 @@ body {
       sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    color: #f0f6ff;
+    background-color: transparent;
   }
 
 .upload-file-container {
@@ -53,7 +54,7 @@ body {
 }
 
 #drop_zone {
-    border: 1px dashed rgb(207, 207, 207);
+    border: 1px dashed rgba(181, 225, 255, 0.8);
     border-radius: 5px;
     color: white;
     width: 200px;
@@ -69,7 +70,7 @@ body {
 }
 #drop_zone.over {
     // border-color: red;
-    background-color: rgb(47, 47, 47);
+    background-color: rgba(2, 56, 99, 0.85);
 }
 
 .polygon-bg {
