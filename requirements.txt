@@ -1,11 +1,10 @@
-tensorflow>=2.12
 flask>=2.3
 flask-cors>=3.0
 pillow>=10.0
 numpy>=1.24
-matplotlib>=3.7
 requests>=2.31
 gunicorn>=21.2
-torch>=2.2
-torchvision>=0.17
 ultralytics>=8.1
+torch==2.2.1+cpu
+torchvision==0.17.1+cpu
+-f https://download.pytorch.org/whl/cpu/torch_stable.html
