@@ -156,17 +156,14 @@ header.hero {
     background: rgba(0, 0, 0, 0.25);
     padding: 0.35rem 0.75rem;
     border-radius: 999px;
-    transition: background 0.25s ease, transform 0.25s ease;
+    transition: background 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
 }
 
 .mode-toggle input {
     accent-color: #9f7aea;
 }
 
-.mode-toggle label:hover {
-    transform: translateY(-2px);
-    background: rgba(0, 0, 0, 0.35);
-}
+\.mode-toggle label:hover {\n    transform: translateY(-2px);\n    background: rgba(0, 0, 0, 0.35);\n}\n\n.mode-toggle label.active {\n    background: rgba(159, 122, 234, 0.35);\n    box-shadow: 0 10px 25px rgba(78, 64, 139, 0.45);\n    transform: translateY(-2px) scale(1.07);\n}
 
 .image-preview {
     position: relative;
@@ -189,3 +186,4 @@ header.hero {
     height: 100%;
     pointer-events: none;
 }
+

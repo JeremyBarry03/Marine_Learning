@@ -54,10 +54,12 @@ function attachModeToggleHandlers() {
         if (input.checked) {
             inferenceMode = input.value;
         }
+        updateModeToggleUI();
         input.addEventListener('change', (event) => {
             inferenceMode = event.target.value;
             clearResults();
             clearOverlay();
+            updateModeToggleUI();
         });
     });
 }
@@ -323,6 +325,21 @@ function renderDetectionList(detections) {
         )
         .join('');
     document.getElementById('top-predictions').innerHTML = `<b>Detections</b><ul>${items}</ul>`;
+}
+
+function updateModeToggleUI() {
+    const labels = document.querySelectorAll('.mode-toggle label');
+    labels.forEach((label) => {
+        const input = label.querySelector('input[type="radio"]');
+        if (!input) {
+            return;
+        }
+        if (input.checked) {
+            label.classList.add('active');
+        } else {
+            label.classList.remove('active');
+        }
+    });
 }
 
 //------------------------------------------------------
