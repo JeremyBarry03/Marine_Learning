@@ -1,46 +1,35 @@
-"""Flask inference service for the marine classifier."""
+"""Flask inference service for the marine classifier (PyTorch backend)."""
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict, List
 
-import json
 import numpy as np
-import tensorflow as tf
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
-from src.config import MARINE_CONFIG
-from src.keras_utils import ensure_preprocess_lambda_deserializable, restore_preprocess_lambda
+from src.pytorch_inference import MarineClassifier
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = PROJECT_ROOT / "webapp" / "public"
+CHECKPOINT_PATH = PROJECT_ROOT / "densenet121_benthic_final.pth"
+CLASS_NAMES_PATH = PROJECT_ROOT / "models" / "metrics" / "class_names.json"
 
 app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
 CORS(app)
 
-CONFIG = MARINE_CONFIG
-IMAGE_SIZE = CONFIG["data"]["image_size"]
-MODEL_PATH = PROJECT_ROOT / CONFIG["training"]["checkpoint_path"]
-CLASS_NAMES_PATH = PROJECT_ROOT / CONFIG["training"]["class_names_path"]
-
-if not MODEL_PATH.exists():
+if not CHECKPOINT_PATH.exists():
     raise FileNotFoundError(
-        f"Trained model not found at {MODEL_PATH}. Run src/train_marine.py before starting the API."
+        f"PyTorch checkpoint not found at {CHECKPOINT_PATH}. "
+        "Ensure densenet121_benthic_final.pth has been exported from training."
     )
 
-if not CLASS_NAMES_PATH.exists():
-    raise FileNotFoundError(
-        f"Class names file missing at {CLASS_NAMES_PATH}. Ensure train_marine.py completed successfully."
-    )
-
-with CLASS_NAMES_PATH.open("r", encoding="utf-8") as handle:
-    CLASS_NAMES: List[str] = json.load(handle)
-
-ensure_preprocess_lambda_deserializable((IMAGE_SIZE, IMAGE_SIZE, 3))
-MODEL = tf.keras.models.load_model(MODEL_PATH, safe_mode=False)
-restore_preprocess_lambda(MODEL, CONFIG["model"]["backbone"])
+CLASSIFIER = MarineClassifier(
+    checkpoint_path=CHECKPOINT_PATH,
+    class_names_path=CLASS_NAMES_PATH if CLASS_NAMES_PATH.exists() else None,
+)
+CLASS_NAMES: List[str] = CLASSIFIER.class_names
 
 SPECIES_FACTS: Dict[str, Dict[str, str]] = {
     "Scallop": {"summary": "Bivalve mollusk often found on sandy seafloor habitats."},
@@ -51,12 +40,6 @@ SPECIES_FACTS: Dict[str, Dict[str, str]] = {
     "Flatfish": {"summary": "Bottom-dwelling fish with asymmetric bodies camouflaged against seabed."},
     "Eel": {"summary": "Elongated fish species occupying crevices and soft-bottom habitats."},
 }
-
-
-def _preprocess_image(image: Image.Image) -> np.ndarray:
-    image = image.convert("RGB").resize((IMAGE_SIZE, IMAGE_SIZE))
-    array = np.asarray(image).astype("float32") / 255.0
-    return array
 
 
 @app.route("/")
@@ -78,12 +61,12 @@ def predict():
     if file_storage.filename == "":
         return jsonify({"error": "Empty filename supplied."}), 400
 
-    image = Image.open(file_storage.stream)
-    processed = _preprocess_image(image)
-    batch = np.expand_dims(processed, axis=0)
+    try:
+        image = Image.open(file_storage.stream)
+    except UnidentifiedImageError:
+        return jsonify({"error": "Uploaded file is not a valid image."}), 400
 
-    logits = MODEL.predict(batch, verbose=0)[0]
-    probabilities = tf.nn.softmax(logits).numpy()
+    probabilities = CLASSIFIER.predict(image).numpy()
     top_index = int(np.argmax(probabilities))
     top_species = CLASS_NAMES[top_index]
     confidence = float(probabilities[top_index])
