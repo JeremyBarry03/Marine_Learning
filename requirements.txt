@@ -1,10 +1,11 @@
 flask>=2.3
 flask-cors>=3.0
 pillow>=10.0
-numpy>=1.24
+numpy>=1.24,<2
 requests>=2.31
 gunicorn>=21.2
 ultralytics>=8.1
+opencv-python-headless>=4.10
 torch==2.2.1+cpu
 torchvision==0.17.1+cpu
--f https://download.pytorch.org/whl/cpu/torch_stable.html
+--extra-index-url https://download.pytorch.org/whl/cpu
